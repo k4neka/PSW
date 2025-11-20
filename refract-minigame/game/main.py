@@ -444,6 +444,12 @@ class RefactoredGameClient:
         """Handle player input based on game phase."""
         from core.game_state import GamePhase
         
+        # Handle character select phase
+        if self.game_state.game_phase == GamePhase.CHARACTER_SELECT:
+            keys = pygame.key.get_pressed()
+            # Navigation happens in the main game loop event handler
+            return
+        
         # Handle menu phase
         if self.game_state.game_phase == GamePhase.MENU:
             keys = pygame.key.get_pressed()
@@ -662,6 +668,14 @@ class RefactoredGameClient:
         """Render the game."""
         from core.game_state import GamePhase
         
+        # Render character select before connecting to server
+        if self.game_state.game_phase == GamePhase.CHARACTER_SELECT:
+            self.renderer.render_character_select_menu(self.game_state.selected_character_type)
+            scaled = pygame.transform.scale(self.display_surface, (self.window_width, self.window_height))
+            self.screen.blit(scaled, (0, 0))
+            pygame.display.flip()
+            return
+        
         if not self.game_state.connected:
             self.renderer.draw_disconnect_screen()
             scaled = pygame.transform.scale(self.display_surface, (self.window_width, self.window_height))
@@ -838,10 +852,8 @@ class RefactoredGameClient:
             self.display_surface.blit(wave_text, (WIDTH - 120, 35))    
     def run(self):
         """Main game loop."""
-        if not self.connect_to_server():
-            return
-        
         self.running = True
+        server_connected = False
         
         # Wait a bit for player to spawn before spawning enemies
         enemy_spawn_delay = 60  # frames
@@ -855,14 +867,41 @@ class RefactoredGameClient:
                         self.running = False
                     elif event.key == pygame.K_F11:
                         pygame.display.toggle_fullscreen()
+                    
+                    # Handle character selection input
+                    from core.game_state import GamePhase
+                    if self.game_state.game_phase == GamePhase.CHARACTER_SELECT:
+                        if event.key == pygame.K_LEFT:
+                            self.game_state.selected_character_type = max(0, self.game_state.selected_character_type - 1)
+                        elif event.key == pygame.K_RIGHT:
+                            self.game_state.selected_character_type = min(2, self.game_state.selected_character_type + 1)
+                        elif event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                            # Only allow confirming default character (index 0)
+                            if self.game_state.selected_character_type == 0:
+                                print(f"Selected character type: {self.game_state.selected_character_type}")
+                                self.game_state.set_phase(GamePhase.MENU)
+                            else:
+                                print("This character is locked!")
+                
                 elif event.type == pygame.VIDEORESIZE:
                     self.window_width = event.w
                     self.window_height = event.h
                     self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
             
+            # Connect to server after character selection
+            from core.game_state import GamePhase
+            if not server_connected and self.game_state.game_phase == GamePhase.MENU:
+                if self.connect_to_server():
+                    server_connected = True
+                else:
+                    print("Failed to connect to server!")
+                    self.running = False
+                    break
+            
+            # Always render, regardless of connection state
+            dt = self.clock.get_time()
+            
             if self.game_state.connected:
-                dt = self.clock.get_time()
-                
                 # Spawn enemies after delay (only once)
                 if frame_counter == enemy_spawn_delay and not self.initial_spawn_done:
                     self.spawn_enemies()
@@ -873,12 +912,8 @@ class RefactoredGameClient:
                 self.update(dt)
                 self.send_position_update()
                 self.check_collisions()
-                self.render()
-            else:
-                self.renderer.draw_disconnect_screen()
-                scaled = pygame.transform.scale(self.display_surface, (self.window_width, self.window_height))
-                self.screen.blit(scaled, (0, 0))
-                pygame.display.flip()
+            
+            self.render()
             
             self.frame_count += 1
             self.clock.tick(FPS)

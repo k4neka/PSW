@@ -4,6 +4,7 @@ Game state management.
 
 class GamePhase:
     """Game phase enumeration."""
+    CHARACTER_SELECT = "character_select"
     MENU = "menu"
     PLAYING = "playing"
     DEAD = "dead"
@@ -23,12 +24,15 @@ class GameState:
         self.connected = False
         
         # Game flow state
-        self.game_phase = GamePhase.MENU
+        self.game_phase = GamePhase.CHARACTER_SELECT
         self.is_host = False  # True if this player is the host
         self.current_wave = 0
         self.alive_players = set()  # Set of alive player IDs
         self.dead_players = set()  # Set of dead player IDs
         self.game_over_reason = None  # "all_dead" or "victory"
+        
+        # Character selection
+        self.selected_character_type = 0  # 0 = default, 1 = type 2, 2 = type 3
         
         # Spawn positions
         self.spawn_x = 0
